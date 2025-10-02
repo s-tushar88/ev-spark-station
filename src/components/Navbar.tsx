@@ -1,9 +1,21 @@
 import { Button } from "@/components/ui/button";
-import { Zap, Menu, X } from "lucide-react";
+import { Zap, Menu, X, User, LogOut } from "lucide-react";
 import { useState } from "react";
+import { useAuth } from "@/contexts/AuthContext";
+import { useNavigate } from "react-router-dom";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 const Navbar = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const { user, signOut } = useAuth();
+  const navigate = useNavigate();
 
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-lg border-b border-border">
@@ -30,9 +42,36 @@ const Navbar = () => {
             <a href="#pricing" className="text-foreground hover:text-primary transition-colors">
               Pricing
             </a>
-            <Button variant="default" className="bg-gradient-primary hover:opacity-90 transition-opacity shadow-glow">
-              Get Started
-            </Button>
+            
+            {user ? (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="icon" className="rounded-full">
+                    <User className="h-5 w-5" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56">
+                  <DropdownMenuLabel>My Account</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem className="text-muted-foreground">
+                    {user.email}
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={signOut} className="text-destructive">
+                    <LogOut className="mr-2 h-4 w-4" />
+                    Sign Out
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : (
+              <Button 
+                variant="default" 
+                className="bg-gradient-primary hover:opacity-90 transition-opacity shadow-glow"
+                onClick={() => navigate("/auth")}
+              >
+                Get Started
+              </Button>
+            )}
           </div>
 
           {/* Mobile Menu Button */}
@@ -72,9 +111,35 @@ const Navbar = () => {
             >
               Pricing
             </a>
-            <Button className="w-full bg-gradient-primary hover:opacity-90 transition-opacity">
-              Get Started
-            </Button>
+            
+            {user ? (
+              <>
+                <div className="pt-2 border-t border-border">
+                  <p className="text-sm text-muted-foreground mb-2">{user.email}</p>
+                  <Button 
+                    variant="outline" 
+                    className="w-full"
+                    onClick={() => {
+                      signOut();
+                      setIsMenuOpen(false);
+                    }}
+                  >
+                    <LogOut className="mr-2 h-4 w-4" />
+                    Sign Out
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <Button 
+                className="w-full bg-gradient-primary hover:opacity-90 transition-opacity"
+                onClick={() => {
+                  navigate("/auth");
+                  setIsMenuOpen(false);
+                }}
+              >
+                Get Started
+              </Button>
+            )}
           </div>
         )}
       </div>
