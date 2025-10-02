@@ -1,43 +1,137 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Zap } from "lucide-react";
-import { useAuth } from "@/contexts/AuthContext";
+import { toast } from "sonner";
+import { Zap, Loader2 } from "lucide-react";
+import { z } from "zod";
+
+const emailSchema = z.string().trim().email({ message: "Invalid email address" });
+const passwordSchema = z.string().min(6, { message: "Password must be at least 6 characters" });
 
 const Auth = () => {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [displayName, setDisplayName] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
-  const { signUp, signIn, user } = useAuth();
   const navigate = useNavigate();
+  const [isLoading, setIsLoading] = useState(false);
+  const [loginEmail, setLoginEmail] = useState("");
+  const [loginPassword, setLoginPassword] = useState("");
+  const [signupEmail, setSignupEmail] = useState("");
+  const [signupPassword, setSignupPassword] = useState("");
+  const [signupDisplayName, setSignupDisplayName] = useState("");
 
   useEffect(() => {
-    if (user) {
-      navigate("/");
-    }
-  }, [user, navigate]);
+    // Check if user is already logged in
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) {
+        navigate("/");
+      }
+    });
+  }, [navigate]);
 
-  const handleSignUp = async (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Validate inputs
+    try {
+      emailSchema.parse(loginEmail);
+      passwordSchema.parse(loginPassword);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        toast.error(error.errors[0].message);
+        return;
+      }
+    }
+
     setIsLoading(true);
-    await signUp(email, password, displayName);
-    setIsLoading(false);
+
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: loginEmail,
+        password: loginPassword,
+      });
+
+      if (error) {
+        if (error.message.includes("Invalid login credentials")) {
+          toast.error("Invalid email or password");
+        } else {
+          toast.error(error.message);
+        }
+        return;
+      }
+
+      if (data.session) {
+        toast.success("Welcome back!");
+        navigate("/");
+      }
+    } catch (error) {
+      toast.error("An unexpected error occurred");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const handleSignIn = async (e: React.FormEvent) => {
+  const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Validate inputs
+    try {
+      emailSchema.parse(signupEmail);
+      passwordSchema.parse(signupPassword);
+      
+      if (!signupDisplayName.trim()) {
+        toast.error("Display name is required");
+        return;
+      }
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        toast.error(error.errors[0].message);
+        return;
+      }
+    }
+
     setIsLoading(true);
-    await signIn(email, password);
-    setIsLoading(false);
+
+    try {
+      const redirectUrl = `${window.location.origin}/`;
+      
+      const { data, error } = await supabase.auth.signUp({
+        email: signupEmail,
+        password: signupPassword,
+        options: {
+          emailRedirectTo: redirectUrl,
+          data: {
+            display_name: signupDisplayName.trim(),
+          },
+        },
+      });
+
+      if (error) {
+        if (error.message.includes("User already registered")) {
+          toast.error("An account with this email already exists");
+        } else {
+          toast.error(error.message);
+        }
+        return;
+      }
+
+      if (data.session) {
+        toast.success("Account created successfully!");
+        navigate("/");
+      } else {
+        toast.success("Account created! Please check your email to confirm.");
+      }
+    } catch (error) {
+      toast.error("An unexpected error occurred");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-hero p-4">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-hero px-4">
       <div className="w-full max-w-md">
         <div className="flex items-center justify-center mb-8 space-x-2">
           <div className="w-12 h-12 rounded-lg bg-gradient-primary flex items-center justify-center shadow-glow">
@@ -54,35 +148,36 @@ const Auth = () => {
             <CardDescription>Sign in to your account or create a new one</CardDescription>
           </CardHeader>
           <CardContent>
-            <Tabs defaultValue="signin" className="w-full">
+            <Tabs defaultValue="login" className="w-full">
               <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="signin">Sign In</TabsTrigger>
+                <TabsTrigger value="login">Login</TabsTrigger>
                 <TabsTrigger value="signup">Sign Up</TabsTrigger>
               </TabsList>
 
-              <TabsContent value="signin">
-                <form onSubmit={handleSignIn} className="space-y-4">
+              <TabsContent value="login">
+                <form onSubmit={handleLogin} className="space-y-4">
                   <div className="space-y-2">
-                    <Label htmlFor="signin-email">Email</Label>
+                    <Label htmlFor="login-email">Email</Label>
                     <Input
-                      id="signin-email"
+                      id="login-email"
                       type="email"
                       placeholder="you@example.com"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
+                      value={loginEmail}
+                      onChange={(e) => setLoginEmail(e.target.value)}
                       required
+                      disabled={isLoading}
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="signin-password">Password</Label>
+                    <Label htmlFor="login-password">Password</Label>
                     <Input
-                      id="signin-password"
+                      id="login-password"
                       type="password"
                       placeholder="••••••••"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
+                      value={loginPassword}
+                      onChange={(e) => setLoginPassword(e.target.value)}
                       required
-                      minLength={6}
+                      disabled={isLoading}
                     />
                   </div>
                   <Button
@@ -90,21 +185,30 @@ const Auth = () => {
                     className="w-full bg-gradient-primary hover:opacity-90 transition-opacity"
                     disabled={isLoading}
                   >
-                    {isLoading ? "Signing in..." : "Sign In"}
+                    {isLoading ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Signing in...
+                      </>
+                    ) : (
+                      "Sign In"
+                    )}
                   </Button>
                 </form>
               </TabsContent>
 
               <TabsContent value="signup">
-                <form onSubmit={handleSignUp} className="space-y-4">
+                <form onSubmit={handleSignup} className="space-y-4">
                   <div className="space-y-2">
                     <Label htmlFor="signup-name">Display Name</Label>
                     <Input
                       id="signup-name"
                       type="text"
                       placeholder="John Doe"
-                      value={displayName}
-                      onChange={(e) => setDisplayName(e.target.value)}
+                      value={signupDisplayName}
+                      onChange={(e) => setSignupDisplayName(e.target.value)}
+                      required
+                      disabled={isLoading}
                     />
                   </div>
                   <div className="space-y-2">
@@ -113,9 +217,10 @@ const Auth = () => {
                       id="signup-email"
                       type="email"
                       placeholder="you@example.com"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
+                      value={signupEmail}
+                      onChange={(e) => setSignupEmail(e.target.value)}
                       required
+                      disabled={isLoading}
                     />
                   </div>
                   <div className="space-y-2">
@@ -124,10 +229,10 @@ const Auth = () => {
                       id="signup-password"
                       type="password"
                       placeholder="••••••••"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
+                      value={signupPassword}
+                      onChange={(e) => setSignupPassword(e.target.value)}
                       required
-                      minLength={6}
+                      disabled={isLoading}
                     />
                   </div>
                   <Button
@@ -135,23 +240,20 @@ const Auth = () => {
                     className="w-full bg-gradient-primary hover:opacity-90 transition-opacity"
                     disabled={isLoading}
                   >
-                    {isLoading ? "Creating account..." : "Sign Up"}
+                    {isLoading ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Creating account...
+                      </>
+                    ) : (
+                      "Create Account"
+                    )}
                   </Button>
                 </form>
               </TabsContent>
             </Tabs>
           </CardContent>
         </Card>
-
-        <div className="text-center mt-6">
-          <Button
-            variant="ghost"
-            onClick={() => navigate("/")}
-            className="text-muted-foreground hover:text-foreground"
-          >
-            Back to Home
-          </Button>
-        </div>
       </div>
     </div>
   );
